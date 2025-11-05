@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Water Reminder Bot</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            width: 90%;
+            max-width: 400px;
+            height: 600px;
+            display: flex;
+            flex-direction: column;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 20px 20px 0 0;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+        .header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        .chat {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .message {
+            display: flex;
+            gap: 10px;
+            max-width: 80%;
+            animation: fadeIn 0.3s;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .bot {
+            align-self: flex-start;
+        }
+        .user {
+            align-self: flex-end;
+            flex-direction: row-reverse;
+        }
+        .avatar {
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+        .bot .avatar {
+            background: #667eea;
+        }
+        .user .avatar {
+            background: #764ba2;
+        }
+        .bubble {
+            padding: 12px 16px;
+            border-radius: 18px;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        .bot .bubble {
+            background: #f1f3f5;
+            color: #333;
+        }
+        .user .bubble {
+            background: #667eea;
+            color: white;
+        }
+        .input-area {
+            padding: 15px;
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            gap: 10px;
+        }
+        input {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 25px;
+            font-size: 14px;
+            outline: none;
+        }
+        input:focus {
+            border-color: #667eea;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 45px;
+            height: 45px;
+            cursor: pointer;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        button:hover {
+            background: #5568d3;
+        }
+        button:disabled {
+            background: #adb5bd;
+            cursor: not-allowed;
+        }
+        .stats {
+            background: #e7f5ff;
+            padding: 10px;
+            border-radius: 12px;
+            text-align: center;
+            font-size: 13px;
+            color: #1971c2;
+        }
+        .quick-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 5px;
+        }
+        .quick-btn {
+            background: white;
+            border: 1px solid #667eea;
+            color: #667eea;
+            padding: 6px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+            cursor: pointer;
+            width: auto;
+            height: auto;
+        }
+        .quick-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>💧 Water Buddy</h1>
+            <p>Your hydration companion</p>
+        </div>
+        <div class="chat" id="chat"></div>
+        <div class="input-area">
+            <input type="text" id="input" placeholder="Type a message..." autocomplete="off">
+            <button id="send">➤</button>
+        </div>
+    </div>
+
+    <script>
+        let waterCount = 0;
+        let goal = 8;
+        let reminderInterval = null;
+        const chat = document.getElementById('chat');
+        const input = document.getElementById('input');
+        const sendBtn = document.getElementById('send');
+
+        function addMessage(text, isUser = false, hasActions = false) {
+            const msg = document.createElement('div');
+            msg.className = `message ${isUser ? 'user' : 'bot'}`;
+            msg.innerHTML = `
+                <div class="avatar">${isUser ? '😊' : '💧'}</div>
+                <div>
+                    <div class="bubble">${text}</div>
+                    ${hasActions ? '<div class="quick-actions" id="actions"></div>' : ''}
+                </div>
+            `;
+            chat.appendChild(msg);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        function addQuickActions() {
+            setTimeout(() => {
+                const actions = document.getElementById('actions');
+                if (actions) {
+                    ['Drank water', 'Set reminder', 'My progress'].forEach(action => {
+                        const btn = document.createElement('button');
+                        btn.className = 'quick-btn';
+                        btn.textContent = action;
+                        btn.onclick = () => handleInput(action.toLowerCase());
+                        actions.appendChild(btn);
+                    });
+                }
+            }, 100);
+        }
+
+        function showStats() {
+            const msg = document.createElement('div');
+            msg.className = 'message bot';
+            const percent = Math.min(100, Math.round((waterCount / goal) * 100));
+            msg.innerHTML = `
+                <div class="avatar">💧</div>
+                <div class="stats">
+                    <strong>${waterCount} / ${goal} glasses</strong><br>
+                    ${percent}% of daily goal 🎯
+                </div>
+            `;
+            chat.appendChild(msg);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        function handleInput(text) {
+            const msg = text.toLowerCase().trim();
+
+            if (!msg) return;
+
+            addMessage(text, true);
+            input.value = '';
+
+            setTimeout(() => {
+                if (msg.includes('drank') || msg.includes('drink') || msg.includes('had')) {
+                    waterCount++;
+                    if (waterCount >= goal) {
+                        addMessage(`Amazing! 🎉 You've reached your daily goal of ${goal} glasses! Keep it up!`);
+                    } else {
+                        addMessage(`Great job! 👏 You've had ${waterCount} glasses today. ${goal - waterCount} more to go!`);
+                    }
+                    showStats();
+                } else if (msg.includes('remind') || msg.includes('notification')) {
+                    if (reminderInterval) clearInterval(reminderInterval);
+                    reminderInterval = setInterval(() => {
+                        if (waterCount < goal) {
+                            addMessage(`⏰ Time to drink water! You're at ${waterCount}/${goal} glasses.`);
+                        }
+                    }, 3600000); // 1 hour
+                    addMessage('Perfect! I\'ll remind you every hour to drink water 💧');
+                } else if (msg.includes('progress') || msg.includes('status') || msg.includes('how')) {
+                    showStats();
+                    if (waterCount === 0) {
+                        addMessage('Let\'s start hydrating! Try logging your first glass 💧');
+                    } else if (waterCount < goal) {
+                        addMessage(`You're doing great! Just ${goal - waterCount} more glasses to reach your goal 🌟`);
+                    }
+                } else if (msg.includes('goal') || msg.includes('set')) {
+                    const num = msg.match(/\d+/);
+                    if (num) {
+                        goal = parseInt(num[0]);
+                        addMessage(`Goal updated to ${goal} glasses per day! 🎯`);
+                        showStats();
+                    } else {
+                        addMessage('How many glasses would you like as your daily goal? (e.g., "set goal 10")');
+                    }
+                } else if (msg.includes('reset')) {
+                    waterCount = 0;
+                    addMessage('Counter reset! Starting fresh for a new day 🌅');
+                    showStats();
+                } else if (msg.includes('help')) {
+                    addMessage('I can help you:<br>• Log water: "drank water"<br>• Check progress: "my progress"<br>• Set reminders: "remind me"<br>• Change goal: "set goal 10"<br>• Reset: "reset"', false, true);
+                    addQuickActions();
+                } else {
+                    addMessage('I\'m here to help you stay hydrated! 💧<br>Try: "drank water", "my progress", or "help"', false, true);
+                    addQuickActions();
+                }
+            }, 500);
+        }
+
+        sendBtn.addEventListener('click', () => handleInput(input.value));
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleInput(input.value);
+        });
+
+        // Welcome message
+        setTimeout(() => {
+            addMessage('Hi! I\'m your Water Buddy 💧 I\'m here to help you stay hydrated!', false, true);
+            setTimeout(() => {
+                addMessage(`Your daily goal is ${goal} glasses of water. Let\'s track your progress! 🎯`);
+                addQuickActions();
+            }, 1000);
+        }, 500);
+    </script>
+</body>
+</html>
